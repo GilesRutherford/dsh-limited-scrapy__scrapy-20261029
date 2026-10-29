@@ -42,10 +42,10 @@ jobs:
           - {python: '3.10.18', toxenv: min-botocore, coverage: true, parsel: '1.5.0'}
     steps:
       - name: Check out source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: ${{ matrix.python }}
 
@@ -56,7 +56,7 @@ jobs:
           sudo apt-get install -y libxml2-dev libxslt1-dev
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
 
       - name: Install mitmproxy with CPython
         run: uv tool install --python 3.13 --python-preference system mitmproxy
@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: ${{ success() && matrix.coverage }}
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           files: coverage.xml
           fail_ci_if_error: true
