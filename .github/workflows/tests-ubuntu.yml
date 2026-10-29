@@ -1,0 +1,85 @@
+name: Ubuntu
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+    - master
+    - '[0-9]+.[0-9]+'
+  pull_request:
+
+concurrency:
+  group: ${{github.workflow}}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    name: ${{ matrix.python }} / ${{ matrix.toxenv }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {python: '3.10', toxenv: py310, coverage: false, parsel: '1.11.0'}
+          - {python: '3.11', toxenv: py311, coverage: false, parsel: '1.11.0'}
+          - {python: '3.12', toxenv: py312, coverage: false, parsel: '1.11.0'}
+          - {python: '3.13', toxenv: py313, coverage: false, parsel: '1.11.0'}
+          - {python: '3.14', toxenv: py314, coverage: true, parsel: '1.11.0'}
+          - {python: '3.14', toxenv: default-reactor, coverage: true, parsel: '1.11.0'}
+          - {python: '3.14', toxenv: no-reactor, coverage: true, parsel: '1.11.0'}
+          - {python: '3.14', toxenv: extra-deps, coverage: true, parsel: '1.11.0'}
+          - {python: '3.14', toxenv: no-reactor-extra-deps, coverage: true, parsel: '1.11.0'}
+          - {python: '3.14', toxenv: botocore, coverage: true, parsel: '1.11.0'}
+          - {python: 'pypy3.11-v7.3.20', toxenv: pypy3, coverage: false, parsel: '1.11.0'}
+          - {python: 'pypy3.11-v7.3.20', toxenv: min-pypy3, coverage: false, parsel: '1.5.0'}
+          - {python: 'pypy3.11-v7.3.20', toxenv: pypy3-extra-deps, coverage: false, parsel: '1.11.0'}
+          - {python: '3.10.18', toxenv: min, coverage: true, parsel: '1.5.0'}
+          - {python: '3.10.18', toxenv: min-default-reactor, coverage: true, parsel: '1.5.0'}
+          - {python: '3.10.18', toxenv: min-no-reactor, coverage: true, parsel: '1.5.0'}
+          - {python: '3.10.18', toxenv: min-extra-deps, coverage: true, parsel: '1.5.0'}
+          - {python: '3.10.18', toxenv: min-botocore, coverage: true, parsel: '1.5.0'}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install system libraries
+        if: ${{ startsWith(matrix.python, 'pypy') || startsWith(matrix.toxenv, 'min') }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev libxslt1-dev
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+
+      - name: Install mitmproxy with CPython
+        run: uv tool install --python 3.13 --python-preference system mitmproxy
+
+      - name: Run tests
+        env:
+          UV_PYTHON_DOWNLOADS: never
+          UV_PYTHON_PREFERENCE: only-system
+          PYTEST_ADDOPTS: "-n auto --junitxml=${{ matrix.toxenv }}.junit.xml ${{ matrix.coverage && '' || '--no-cov' }}"
+        run: |
+          printf 'parsel==%s\n' '${{ matrix.parsel }}' > "$RUNNER_TEMP/parsel-constraint.txt"
+          UV_CONSTRAINT="$RUNNER_TEMP/parsel-constraint.txt" uvx --with tox-uv tox -e '${{ matrix.toxenv }}' -x 'testenv.constrain_package_deps=true'
+
+      - name: Upload coverage to Codecov
+        if: ${{ success() && matrix.coverage }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
+        with:
+          files: coverage.xml
+          fail_ci_if_error: true
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3
+        with:
+          files: '*.junit.xml'
+          fail_ci_if_error: true
